@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import pika, sys, os
 import boto3
+import json
 
 def main():
 
@@ -12,22 +13,18 @@ def main():
         verify=False                                        
     )
     
-    for bucket in s3.buckets.all():
-        print(bucket.name)
-    
     connection = pika.BlockingConnection(pika.ConnectionParameters('rabbitmq'))
     channel = connection.channel()
 
     channel.queue_declare(queue='unpacker-queue')
 
     def callback(ch, method, properties, body):
-        print(" [x] Received %r" % body)
-        print("     ch=" + str(ch))
-        print("#####")
-        print(ch)
-        print("#####")
-        print("     method=" + str(method))
-        print("     properties=" + str(properties));
+        event = json.loads(body.decode())
+        for record in event['Records']:
+            bucketName = record['s3']['bucket']['name']
+            objKey = record['s3']['object']['key']
+            print("bucket=" + bucketName);
+            print("objKey=" + objKey);
 
     channel.basic_consume(queue='unpacker-queue',
                       auto_ack=True,
