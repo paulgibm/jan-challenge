@@ -2,6 +2,10 @@
 import pika, sys, os
 import boto3
 import json
+from zipfile import ZipFile
+import io
+
+S3_EVENT_OBJ_CREATE="s3:ObjectCreated:Put"
 
 def main():
 
@@ -19,12 +23,29 @@ def main():
     channel.queue_declare(queue='unpacker-queue')
 
     def callback(ch, method, properties, body):
-        event = json.loads(body.decode())
-        for record in event['Records']:
-            bucketName = record['s3']['bucket']['name']
-            objKey = record['s3']['object']['key']
-            print("bucket=" + bucketName);
-            print("objKey=" + objKey);
+        bodyObj = json.loads(body.decode())
+        eventType = bodyObj['EventName']
+        print("eventType=" + eventType)
+        if eventType == S3_EVENT_OBJ_CREATE:
+            for record in bodyObj['Records']:
+                try:
+                    bucketName = record['s3']['bucket']['name']
+                    objKey = record['s3']['object']['key']
+                    print("bucket=" + bucketName);
+                    print("objKey=" + objKey);
+                    s3Obj = s3.get_object(Bucket=bucketName, Key="objKey")
+                    print("## s3Obj ##");
+                    print(s3Obj)
+
+                    s3ObjZip = ZipFile(io.BytesIO(s3Obj['Body'].read()))
+                    print("## s3ObjZip ##");
+                    print(s3ObjZip)
+
+                except Exception as e:
+                    print(e)
+                    
+        else:
+            print("Not a create event. Event=" + eventType)
 
     channel.basic_consume(queue='unpacker-queue',
                       auto_ack=True,
