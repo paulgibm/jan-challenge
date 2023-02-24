@@ -4,8 +4,11 @@ import boto3
 import json
 from zipfile import ZipFile
 import io
+import uuid
 
 S3_EVENT_OBJ_CREATE="s3:ObjectCreated:Put"
+S3_BCKT_UNPACKED="unpacked"
+
 
 def main():
 
@@ -28,20 +31,35 @@ def main():
         print("eventType=" + eventType)
         if eventType == S3_EVENT_OBJ_CREATE:
             for record in bodyObj['Records']:
+                bucketName = record['s3']['bucket']['name']
+                objKey = record['s3']['object']['key']
                 try:
-                    bucketName = record['s3']['bucket']['name']
-                    objKey = record['s3']['object']['key']
-                    print("bucket=" + bucketName);
-                    print("objKey=" + objKey);
-                    s3Obj = s3.get_object(Bucket=bucketName, Key="objKey")
-                    print("## s3Obj ##");
+                    #print("bucket=" + bucketName);
+                    #print("objKey=" + objKey);
+                    s3Obj = s3.get_object(Bucket=bucketName, Key=objKey)
+                    #print("## s3Obj ##");
                     print(s3Obj)
 
+                    print("Processing " + bucketName + "/" + objKey + "...")
+                    #print("  Bucket name: " + bucketName);
+                    #print("  Object Key: " + objKey);
+                    #print("  Message: " + "Received");
+
                     s3ObjZip = ZipFile(io.BytesIO(s3Obj['Body'].read()))
-                    print("## s3ObjZip ##");
-                    print(s3ObjZip)
+                    #print("## s3ObjZip ##");
+                    #print(s3ObjZip)
+                    
+                    #print(objKey + " contains the following files:")
+                    for fileName in s3ObjZip.namelist():
+                        fileContents = s3ObjZip.open(fileName).read()
+                        s3.put_object(Body=fileContents, Bucket=S3_BCKT_UNPACKED, Key=fileName)
+                        print(fileName + " added to unpacked bucket");
 
                 except Exception as e:
+                    print("Error:")
+                    print("  Bucket name: " + bucketName);
+                    print("  Object Key: " + objKey);
+                    print("  Message: " + str(e));
                     print(e)
                     
         else:
